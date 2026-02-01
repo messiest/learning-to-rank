@@ -1,0 +1,6 @@
+[project]
+name = "learning-to-rank"
+version = "0.1.0"
+description = "Implementing learning-to-rank models with TensorFlow"
+requires-python = ">=3.12"
+dependencies = []
