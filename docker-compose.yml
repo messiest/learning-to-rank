@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  tf-serving:
+    image: tensorflow/serving:latest
+    container_name: ltr_serving
+    ports:
+      - "8500:8500" # gRPC
+      - "8501:8501" # REST API
+    volumes:
+      # Mount your exported model directory
+      - ./serving_model/ensemble:/models/ensemble
+      # Mount the config file
+      - ./serving_model/models.config:/models/models.config
+    command:
+      - "--model_config_file=/models/models.config"
+      - "--model_config_file_poll_wait_seconds=60"
+    environment:
+      - MODEL_NAME=ltr_ensemble
