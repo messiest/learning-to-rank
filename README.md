@@ -102,4 +102,9 @@ curl -X POST http://localhost:8501/v1/models/ltr_ensemble:predict \
 
 ---
 
-This project is now a complete end-to-end LTR system. **Is there anything else you’d like to add, such as a script for "Distilling" the ensemble into a smaller, faster model for low-latency ranking?**
+✒️ Attribution & Provenance
+This library was developed through an authentic, iterative collaboration between the user and Gemini, an AI from Google.
+
+- Core Model: Gemini 1.5 Flash (Web variant)
+- Tier: Paid (Advanced Extended Context & Reasoning)
+- Development Cycle: Feb 2026
