@@ -15,11 +15,12 @@ import tensorflow as tf
 
 # Try to import config, but provide defaults if running standalone
 try:
-    from .config import BATCH_SIZE, NUM_FEATURES, PADDING_LABEL
+    from .config import BATCH_SIZE, NUM_FEATURES, PADDING_LABEL, MAX_LIST_SIZE
 except ImportError:
     NUM_FEATURES = 136
     PADDING_LABEL = -1.0
     BATCH_SIZE = 32
+    MAX_LIST_SIZE = 100
 
 __all__ = [
     "parse_libsvm_line",
@@ -213,11 +214,19 @@ def parse_tfrecord_fn(example_proto: bytes) -> Tuple[tf.Tensor, tf.Tensor]:
     return sequence['features'], tf.squeeze(sequence['labels'], axis=-1)
 
 
+def truncate_fn(features: tf.Tensor, labels: tf.Tensor, max_list_size: int):
+    """Truncates the feature and label tensors to a maximum list size."""
+    # We take the first 'max_list_size' documents for the query
+    features = features[:max_list_size, :]
+    labels = labels[:max_list_size]
+    return features, labels
+
 def build_dataset(
     file_paths: Union[str, List[str]], 
     batch_size: int = BATCH_SIZE,
     shuffle: bool = True,
-    cache: bool = True  # Added cache toggle
+    cache: bool = True,
+    max_list_size: Optional[int] = MAX_LIST_SIZE,
 ) -> tf.data.Dataset:
     """Creates a tf.data.Dataset optimized for Learning to Rank."""
     if isinstance(file_paths, str):
@@ -232,10 +241,16 @@ def build_dataset(
     
     dataset = dataset.map(parse_tfrecord_fn, num_parallel_calls=tf.data.AUTOTUNE)
     
+    # --- TRUNCATION STRATEGY ---
+    if max_list_size:
+        # We use a lambda to pass the max_list_size to our truncate function
+        dataset = dataset.map(
+            lambda f, l: truncate_fn(f, l, max_list_size),
+            num_parallel_calls=tf.data.AUTOTUNE
+        )
+    
     # --- CACHING STRATEGY ---
     if cache:
-        # If the dataset fits in RAM, use .cache()
-        # If it's too large, use .cache('path/to/file') to cache to disk
         dataset = dataset.cache()
     
     if shuffle:
