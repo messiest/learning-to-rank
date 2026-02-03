@@ -18,6 +18,7 @@ dependencies = [
 [project.scripts]
 convert-data = "scripts.convert_data:main"
 train = "scripts.train_and_tune:main"
+train_transformer = "scripts.train_and_tune_transformer:main"
 benchmark = "scripts.benchmark:main"
 
 [project.optional-dependencies]
