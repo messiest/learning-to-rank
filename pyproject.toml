@@ -40,3 +40,8 @@ filterwarnings = [
     "ignore:Type google._upb._message.MessageMapContainer uses PyType_Spec:DeprecationWarning",
     "ignore:Type google._upb._message.ScalarMapContainer uses PyType_Spec:DeprecationWarning",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]
