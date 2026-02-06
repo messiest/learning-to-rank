@@ -8,6 +8,7 @@ building high-performance tf.data pipelines for training and inference.
 from __future__ import annotations
 
 import os
+from hashlib import md5
 from typing import Generator, List, Optional, Tuple, Union
 
 import numpy as np
@@ -233,6 +234,8 @@ def build_dataset(
     if isinstance(file_paths, str):
         file_paths = [file_paths]
 
+    dataset_id = md5("".join(file_paths).encode("utf-8")).hexdigest() 
+
     dataset = tf.data.Dataset.from_tensor_slices(file_paths)
     dataset = dataset.interleave(
         tf.data.TFRecordDataset, 
@@ -252,7 +255,7 @@ def build_dataset(
     
     # --- CACHING STRATEGY ---
     if cache:
-        dataset = dataset.cache()
+        dataset = dataset.apply(tf.data.experimental.snapshot(f"./{dataset_id}_snapshot"))
     
     if shuffle:
         dataset = dataset.shuffle(buffer_size=1000)
