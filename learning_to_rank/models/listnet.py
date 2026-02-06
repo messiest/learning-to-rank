@@ -12,6 +12,9 @@ from typing import Any, Dict, List
 import keras
 import tensorflow as tf
 
+from learning_to_rank.config import NUM_FEATURES
+from learning_to_rank.layers import ResidualBlock
+
 __all__ = [
     "ListNet",
     "ResListNet",
@@ -34,7 +37,6 @@ class ListNet(keras.Model):
 
     def __init__(
         self, 
-        num_features: int, 
         hidden_units: List[int] = [128, 64, 32], 
         dropout_rate: float = 0.1, 
         **kwargs
@@ -48,7 +50,6 @@ class ListNet(keras.Model):
             **kwargs: Standard Keras Model arguments.
         """
         super().__init__(**kwargs)
-        self.num_features = num_features
         self.hidden_units = hidden_units
         self.dropout_rate = dropout_rate
         
@@ -64,6 +65,24 @@ class ListNet(keras.Model):
         ]
             
         self.score_layer = keras.layers.Dense(1, activation=None)
+
+    def compute_output_shape(self, input_shape):
+        """
+        Input: (batch_size, num_docs, num_features)
+        Output: (batch_size, num_docs)
+        """
+        # We return the batch size and document count, dropping the feature dim
+        return (input_shape[0], input_shape[1])
+    
+    def build(self, input_shape):
+        """Creates the weights of the model."""
+        # input_shape is (batch_size, num_docs, num_features)
+        # We grab the feature dimension: input_shape[-1]
+        for units in self.hidden_units:
+            self.dense_layers.append(keras.layers.Dense(units, activation="relu"))
+        
+        self.output_layer = keras.layers.Dense(1) # Linear output for ranking scores
+        super().build(input_shape)
 
     def call(self, inputs: tf.Tensor, training: bool = False) -> tf.Tensor:
         """Forward pass of the model.
@@ -83,12 +102,18 @@ class ListNet(keras.Model):
                 
         scores = self.score_layer(x)
         return tf.squeeze(scores, axis=-1)
+    
+    def compute_output_shape(self, input_shape):
+        """
+        Input: (batch_size, num_docs, num_features)
+        Output: (batch_size, num_docs)
+        """
+        return (input_shape[0], input_shape[1])
 
     def get_config(self) -> Dict[str, Any]:
         """Returns the config for serialization."""
         config = super().get_config()
         config.update({
-            "num_features": self.num_features,
             "hidden_units": self.hidden_units,
             "dropout_rate": self.dropout_rate,
         })
@@ -108,7 +133,6 @@ class ResListNet(keras.Model):
 
     def __init__(
         self, 
-        num_features: int, 
         hidden_units: List[int] = [256, 128, 64], 
         dropout_rate: float = 0.2, 
         **kwargs
@@ -116,30 +140,19 @@ class ResListNet(keras.Model):
         """Initializes the ResListNet model.
 
         Args:
-            num_features: Total number of features per document.
             hidden_units: Architecture of the residual blocks.
             dropout_rate: Fraction of units to drop during training.
             **kwargs: Standard Keras Model arguments.
         """
         super().__init__(**kwargs)
-        self.num_features = num_features
         self.hidden_units = hidden_units
         self.dropout_rate = dropout_rate
         
         self.input_bn = keras.layers.BatchNormalization()
-        
-        self.dense_layers = []
-        self.norm_layers = []
-        self.dropout_layers = []
-        self.projections = []
-        
-        for units in hidden_units:
-            self.dense_layers.append(keras.layers.Dense(units, activation='relu'))
-            self.norm_layers.append(keras.layers.BatchNormalization())
-            self.dropout_layers.append(keras.layers.Dropout(dropout_rate))
-            self.projections.append(keras.layers.Dense(units, use_bias=False))
-            
-        self.score_layer = keras.layers.Dense(1, activation=None)
+        self.res_blocks = [
+            ResidualBlock(units, dropout_rate) for units in hidden_units
+        ]
+        self.score_layer = keras.layers.Dense(1)
 
     def call(self, inputs: tf.Tensor, training: bool = False) -> tf.Tensor:
         """Forward pass with residual connections.
@@ -153,23 +166,18 @@ class ResListNet(keras.Model):
         """
         x = self.input_bn(inputs, training=training)
         
-        for i in range(len(self.dense_layers)):
-            shortcut = self.projections[i](x)
-            
-            out = self.dense_layers[i](x)
-            out = self.norm_layers[i](out, training=training)
-            out = self.dropout_layers[i](out, training=training)
-            
-            x = out + shortcut
+        for block in self.res_blocks:
+            x = block(x, training=training)
                 
         scores = self.score_layer(x)
         return tf.squeeze(scores, axis=-1)
 
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[1])
+
     def get_config(self) -> Dict[str, Any]:
-        """Returns the config for serialization."""
         config = super().get_config()
         config.update({
-            "num_features": self.num_features,
             "hidden_units": self.hidden_units,
             "dropout_rate": self.dropout_rate,
         })

@@ -31,7 +31,7 @@ def test_hypermodel_build(hypermodel_cls):
 
 def test_listnet_tapering_logic():
     """Verify the hidden units tapering calculation inside build."""
-    hypermodel = ListNetHyperModel(num_features=10)
+    hypermodel = ListNetHyperModel()
     hp = kt.HyperParameters()
     hp.values['num_layers'] = 3
     hp.values['base_units'] = 64

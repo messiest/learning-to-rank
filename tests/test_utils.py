@@ -15,7 +15,7 @@ from learning_to_rank.utils import (
 
 def test_permutation_importance_logic():
     """Verify that PFI identifies a highly predictive feature."""
-    model = ListNet(num_features=2, hidden_units=[16, 8])
+    model = ListNet(hidden_units=[16, 8])
     
     # Create very distinct data: 
     # If feature 0 is high, label is high. If low, label is low.
@@ -83,7 +83,7 @@ def test_predict_ensemble(mock_load_model, mock_ltr_data):
 
 def test_permutation_importance_empty_dataset():
     """Verify ValueError is raised when an empty dataset is provided."""
-    model = ListNet(num_features=2)
+    model = ListNet()
     empty_ds = tf.data.Dataset.from_tensor_slices(([], [])).batch(1)
     
     with pytest.raises(ValueError, match="Dataset is empty"):
