@@ -29,6 +29,7 @@ __all__ = [
     "convert_libsvm_to_tfrecord",
     "parse_tfrecord_fn",
     "build_dataset",
+    "combine_tfrecords"
 ]
 
 # ==============================================================================
@@ -263,3 +264,40 @@ def build_dataset(
     )
     
     return dataset.prefetch(tf.data.AUTOTUNE)
+
+def combine_tfrecords(input_files, output_path, compression_type=None):
+    """
+    Combines multiple TFRecord files into a single output file.
+    """
+    # 1. Validation
+    if not input_files:
+        raise ValueError("No input files provided to combine.")
+    
+    # Ensure the output directory exists
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        print(f"Creating output directory: {output_dir}")
+        os.makedirs(output_dir)
+
+    # 2. Initialize the writer
+    # Note: If your source files are GZIP compressed, pass 'GZIP'
+    options = tf.io.TFRecordOptions(compression_type=compression_type)
+    
+    print(f"--- Combining {len(input_files)} files ---")
+    print(f"Output: {output_path}")
+
+    total_count = 0
+    
+    # 3. Stream and Write
+    with tf.io.TFRecordWriter(output_path, options=options) as writer:
+        # tf.data.TFRecordDataset automatically handles reading from multiple files
+        raw_dataset = tf.data.TFRecordDataset(input_files, compression_type=compression_type)
+        
+        for raw_record in raw_dataset:
+            writer.write(raw_record.numpy())
+            total_count += 1
+            
+            if total_count % 5000 == 0:
+                print(f"Processed {total_count} records...", end="\r")
+
+    print(f"\n✅ [SUCCESS] Combined {total_count} records into: {output_path}")
