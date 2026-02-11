@@ -94,6 +94,11 @@ class TransformerRanker(keras.Model):
         """Standard Keras build method."""
         super().build(input_shape)
 
+    def compute_output_shape(self, input_shape):
+        # input_shape is (batch_size, num_docs, num_features)
+        # our output is (batch_size, num_docs)
+        return (input_shape[0], input_shape[1])
+
     def call(self, inputs: tf.Tensor, training: bool = False) -> tf.Tensor:
         """Forward pass for the Transformer ranker.
 

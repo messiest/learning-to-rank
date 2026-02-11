@@ -8,6 +8,7 @@ building high-performance tf.data pipelines for training and inference.
 from __future__ import annotations
 
 import os
+from hashlib import md5
 from typing import Generator, List, Optional, Tuple, Union
 
 import numpy as np
@@ -15,11 +16,12 @@ import tensorflow as tf
 
 # Try to import config, but provide defaults if running standalone
 try:
-    from .config import BATCH_SIZE, NUM_FEATURES, PADDING_LABEL
+    from .config import BATCH_SIZE, NUM_FEATURES, PADDING_LABEL, MAX_LIST_SIZE
 except ImportError:
     NUM_FEATURES = 136
     PADDING_LABEL = -1.0
     BATCH_SIZE = 32
+    MAX_LIST_SIZE = 100
 
 __all__ = [
     "parse_libsvm_line",
@@ -28,6 +30,7 @@ __all__ = [
     "convert_libsvm_to_tfrecord",
     "parse_tfrecord_fn",
     "build_dataset",
+    "combine_tfrecords"
 ]
 
 # ==============================================================================
@@ -213,15 +216,25 @@ def parse_tfrecord_fn(example_proto: bytes) -> Tuple[tf.Tensor, tf.Tensor]:
     return sequence['features'], tf.squeeze(sequence['labels'], axis=-1)
 
 
+def truncate_fn(features: tf.Tensor, labels: tf.Tensor, max_list_size: int):
+    """Truncates the feature and label tensors to a maximum list size."""
+    # We take the first 'max_list_size' documents for the query
+    features = features[:max_list_size, :]
+    labels = labels[:max_list_size]
+    return features, labels
+
 def build_dataset(
     file_paths: Union[str, List[str]], 
     batch_size: int = BATCH_SIZE,
     shuffle: bool = True,
-    cache: bool = True  # Added cache toggle
+    cache: bool = True,
+    max_list_size: Optional[int] = MAX_LIST_SIZE,
 ) -> tf.data.Dataset:
     """Creates a tf.data.Dataset optimized for Learning to Rank."""
     if isinstance(file_paths, str):
         file_paths = [file_paths]
+
+    dataset_id = md5("".join(file_paths).encode("utf-8")).hexdigest() 
 
     dataset = tf.data.Dataset.from_tensor_slices(file_paths)
     dataset = dataset.interleave(
@@ -232,11 +245,17 @@ def build_dataset(
     
     dataset = dataset.map(parse_tfrecord_fn, num_parallel_calls=tf.data.AUTOTUNE)
     
+    # --- TRUNCATION STRATEGY ---
+    if max_list_size:
+        # We use a lambda to pass the max_list_size to our truncate function
+        dataset = dataset.map(
+            lambda f, l: truncate_fn(f, l, max_list_size),
+            num_parallel_calls=tf.data.AUTOTUNE
+        )
+    
     # --- CACHING STRATEGY ---
     if cache:
-        # If the dataset fits in RAM, use .cache()
-        # If it's too large, use .cache('path/to/file') to cache to disk
-        dataset = dataset.cache()
+        dataset = dataset.apply(tf.data.experimental.snapshot(f"./{dataset_id}_snapshot"))
     
     if shuffle:
         dataset = dataset.shuffle(buffer_size=1000)
@@ -248,3 +267,40 @@ def build_dataset(
     )
     
     return dataset.prefetch(tf.data.AUTOTUNE)
+
+def combine_tfrecords(input_files, output_path, compression_type=None):
+    """
+    Combines multiple TFRecord files into a single output file.
+    """
+    # 1. Validation
+    if not input_files:
+        raise ValueError("No input files provided to combine.")
+    
+    # Ensure the output directory exists
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        print(f"Creating output directory: {output_dir}")
+        os.makedirs(output_dir)
+
+    # 2. Initialize the writer
+    # Note: If your source files are GZIP compressed, pass 'GZIP'
+    options = tf.io.TFRecordOptions(compression_type=compression_type)
+    
+    print(f"--- Combining {len(input_files)} files ---")
+    print(f"Output: {output_path}")
+
+    total_count = 0
+    
+    # 3. Stream and Write
+    with tf.io.TFRecordWriter(output_path, options=options) as writer:
+        # tf.data.TFRecordDataset automatically handles reading from multiple files
+        raw_dataset = tf.data.TFRecordDataset(input_files, compression_type=compression_type)
+        
+        for raw_record in raw_dataset:
+            writer.write(raw_record.numpy())
+            total_count += 1
+            
+            if total_count % 5000 == 0:
+                print(f"Processed {total_count} records...", end="\r")
+
+    print(f"\n✅ [SUCCESS] Combined {total_count} records into: {output_path}")

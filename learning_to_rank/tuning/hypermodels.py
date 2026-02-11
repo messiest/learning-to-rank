@@ -12,6 +12,7 @@ import keras
 import keras_tuner as kt
 import tensorflow as tf
 
+from learning_to_rank.config import NUM_FEATURES
 from learning_to_rank.losses import ListwiseSoftmaxLoss
 from learning_to_rank.metrics import NDCGMetric
 from learning_to_rank.models.listnet import ListNet, ResListNet
@@ -40,7 +41,7 @@ def _build_functional_wrapper(
 class ListNetHyperModel(kt.HyperModel):
     """Search space for the standard ListNet MLP."""
 
-    def __init__(self, num_features: int = 136, name: Optional[str] = None, **kwargs):
+    def __init__(self, num_features: int = NUM_FEATURES, name: Optional[str] = None, **kwargs):
         super().__init__(name=name, **kwargs)
         self.num_features = num_features
 
@@ -55,7 +56,6 @@ class ListNetHyperModel(kt.HyperModel):
         ]
 
         internal_model = ListNet(
-            num_features=self.num_features, 
             hidden_units=hidden_units, 
             dropout_rate=dropout_rate
         )
@@ -76,7 +76,7 @@ class ListNetHyperModel(kt.HyperModel):
 class ResListNetHyperModel(kt.HyperModel):
     """Search space for the Deep Residual Ranker."""
 
-    def __init__(self, num_features: int = 136, name: Optional[str] = None, **kwargs):
+    def __init__(self, num_features: int = NUM_FEATURES, name: Optional[str] = None, **kwargs):
         super().__init__(name=name, **kwargs)
         self.num_features = num_features
 
@@ -91,7 +91,6 @@ class ResListNetHyperModel(kt.HyperModel):
         ]
 
         internal_model = ResListNet(
-            num_features=self.num_features, 
             hidden_units=hidden_units,
             dropout_rate=dropout_rate
         )
@@ -112,7 +111,7 @@ class ResListNetHyperModel(kt.HyperModel):
 class TransformerRankerHyperModel(kt.HyperModel):
     """Search space for the Context-Aware Transformer Ranker."""
 
-    def __init__(self, num_features: int = 136, name: Optional[str] = None, **kwargs):
+    def __init__(self, num_features: int = NUM_FEATURES, name: Optional[str] = None, **kwargs):
         super().__init__(name=name, **kwargs)
         self.num_features = num_features
 

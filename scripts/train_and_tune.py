@@ -121,7 +121,7 @@ def main():
         results[fold] = eval_metrics
         
         # 7. Save Model
-        save_name = f"{args.model_type}_{fold}_best"
+        save_name = f"{args.model_type}_{fold}_best.keras"
         save_path = os.path.join(args.model_save_dir, save_name)
         best_model.save(save_path)
         print(f"Model saved: {save_path}")
